@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Case File — Clue Tracker</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Crimson+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root{
+  --bg:#13201A;
+  --surface:#1B2A20;
+  --surface-raised:#22332A;
+  --manila:#E8DBB7;
+  --manila-dark:#D8C593;
+  --ink:#241C12;
+  --ink-soft:#5B5440;
+  --gold:#CC9F5C;
+  --gold-light:#F2D699;
+  --red:#8A2E27;
+  --red-bright:#DD5A47;
+  --line:rgba(204,159,92,0.28);
+  --charcoal:#5C5440;
+}
+*{box-sizing:border-box;}
+body{margin:0;padding:0;background:var(--bg);color:var(--manila);font-family:'Crimson Pro',serif;}
+#app{max-width:1280px;margin:0 auto;padding:28px 20px 60px;}
+
+::selection{background:var(--gold);color:var(--ink);}
+:focus-visible{outline:2px solid var(--gold-light);outline-offset:2px;}
+
+/* ---------- Masthead ---------- */
+.masthead{
+  display:flex;align-items:flex-end;justify-content:space-between;
+  border-bottom:3px double var(--line);
+  padding-bottom:14px;margin-bottom:26px;flex-wrap:wrap;gap:14px;
+}
+.masthead-left{display:flex;align-items:center;gap:14px;}
+.masthead h1{
+  font-family:'Special Elite',monospace;
+  font-size:30px;letter-spacing:1px;margin:0;color:var(--gold-light);
+  text-shadow:0 1px 0 rgba(0,0,0,0.4);
+}
+.masthead p{margin:4px 0 0;color:var(--manila-dark);font-size:14px;letter-spacing:0.4px;opacity:0.8;}
+.icon-mark{width:34px;height:34px;flex-shrink:0;}
+.reset-btn{
+  background:transparent;border:1px solid var(--line);color:var(--manila-dark);
+  font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;
+  padding:8px 14px;border-radius:2px;cursor:pointer;transition:all .15s ease;
+}
+.reset-btn:hover{border-color:var(--red-bright);color:var(--red-bright);}
+.undo-btn{
+  background:transparent;border:1px solid var(--line);color:var(--manila-dark);
+  font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;
+  padding:8px 14px;border-radius:2px;cursor:pointer;transition:all .15s ease;
+}
+.undo-btn:hover:not(:disabled){border-color:var(--gold-light);color:var(--gold-light);}
+.undo-btn:disabled{opacity:0.35;cursor:not-allowed;}
+.masthead-actions{display:flex;gap:8px;}
+
+/* ---------- Layout ---------- */
+.layout{display:grid;grid-template-columns:1fr 360px;gap:22px;align-items:start;}
+@media (max-width:920px){.layout{grid-template-columns:1fr;}}
+
+.panel{
+  background:var(--surface);border:1px solid var(--line);border-radius:3px;
+  padding:18px;margin-bottom:18px;
+}
+.panel h2{
+  font-family:'Special Elite',monospace;font-size:14px;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--gold);margin:0 0 14px;display:flex;align-items:center;gap:8px;
+}
+.panel h2::after{content:'';flex:1;height:1px;background:var(--line);}
+
+/* ---------- Board / grid ---------- */
+.board{background:var(--surface);border:1px solid var(--line);border-radius:3px;padding:18px;}
+.board-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--manila-dark);}
+.legend span{display:inline-flex;align-items:center;gap:6px;}
+.legend i{width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;border-radius:3px;font-style:normal;font-size:11px;border:1px solid var(--line);}
+.legend i.has{color:var(--gold-light);}
+.legend i.not{color:var(--charcoal);}
+.legend i.maybe{color:var(--manila-dark);}
+.legend i.env{color:var(--red-bright);}
+.legend i.prob-swatch{background:linear-gradient(90deg, rgba(204,159,92,0.08), rgba(204,159,92,0.65));border-color:var(--line);}
+
+.empty-state{padding:40px 20px;text-align:center;color:var(--manila-dark);font-size:15px;}
+.empty-state b{color:var(--gold-light);}
+
+.board-scroll{overflow-x:auto;}
+table{border-collapse:collapse;width:100%;min-width:480px;}
+thead th{
+  font-family:'Special Elite',monospace;font-size:11.5px;letter-spacing:0.5px;
+  color:var(--manila-dark);text-align:center;padding:8px 6px;border-bottom:2px solid var(--line);
+  position:sticky;top:0;background:var(--surface);white-space:nowrap;
+}
+thead th.evidence-th{text-align:left;}
+thead th .pcount{display:block;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gold);font-weight:400;margin-top:2px;}
+thead th.envelope-th{color:var(--red-bright);}
+
+tr.cat-row td{
+  font-family:'Special Elite',monospace;font-size:11px;letter-spacing:2px;text-transform:uppercase;
+  color:var(--ink);background:var(--manila);padding:6px 10px;border-top:1px solid var(--bg);border-bottom:1px solid var(--bg);
+}
+td.card-name{
+  font-size:14.5px;color:var(--manila);padding:7px 10px;white-space:nowrap;border-bottom:1px solid rgba(255,255,255,0.04);
+}
+td.cell{text-align:center;padding:3px;border-bottom:1px solid rgba(255,255,255,0.04);}
+button.mark{
+  width:30px;height:30px;border-radius:4px;border:1px dashed var(--line);background:transparent;
+  color:transparent;cursor:pointer;font-size:15px;font-weight:700;transition:transform .12s ease, border-color .12s ease;
+}
+button.mark:hover{border-color:var(--gold);}
+button.mark.has{border:1px solid var(--gold);color:var(--gold-light);background:rgba(204,159,92,0.14);}
+button.mark.not{border-style:solid;border-color:var(--charcoal);color:var(--charcoal);}
+button.mark.maybe{border-color:var(--manila-dark);color:var(--manila-dark);}
+button.mark.envelope-has{border:1px solid var(--red-bright);color:var(--red-bright);background:rgba(221,90,71,0.16);}
+button.mark.stamp{animation:stampPulse .28s ease;}
+button.mark.prob{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:600;letter-spacing:0.2px;color:var(--gold-light);}
+button.mark.env-prob{color:var(--red-bright);}
+@keyframes stampPulse{0%{transform:scale(1.5) rotate(-6deg);}100%{transform:scale(1) rotate(0deg);}}
+@media (prefers-reduced-motion: reduce){button.mark.stamp{animation:none;}}
+
+/* ---------- Players panel ---------- */
+.player-row{
+  display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:3px;margin-bottom:5px;
+  background:var(--surface-raised);border:1px solid transparent;
+}
+.player-row.current{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset;}
+.player-row .name{flex:1;font-size:15px;}
+.player-row .badge{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--gold);background:rgba(204,159,92,0.12);padding:2px 7px;border-radius:10px;}
+.player-row .badge.refute-badge{color:var(--red-bright);background:rgba(221,90,71,0.12);}
+.player-row .order-btn{background:none;border:none;color:var(--manila-dark);cursor:pointer;font-size:12px;padding:2px 4px;}
+.player-row .order-btn:hover{color:var(--gold-light);}
+.player-row .del-btn{background:none;border:none;color:var(--manila-dark);cursor:pointer;font-size:14px;padding:2px 6px;}
+.player-row .del-btn:hover{color:var(--red-bright);}
+
+.add-player-form{display:flex;gap:6px;margin-top:10px;}
+.add-player-form input[type=text]{flex:1;min-width:0;}
+.add-player-form input[type=number]{width:62px;}
+
+input[type=text], input[type=number], select{
+  background:var(--bg);border:1px solid var(--line);color:var(--manila);
+  font-family:'Crimson Pro',serif;font-size:14px;padding:7px 8px;border-radius:3px;
+}
+select{cursor:pointer;}
+.btn{
+  background:var(--gold);color:var(--ink);border:none;font-family:'JetBrains Mono',monospace;
+  font-size:11.5px;letter-spacing:0.6px;text-transform:uppercase;padding:8px 12px;border-radius:3px;
+  cursor:pointer;font-weight:600;transition:background .15s ease;
+}
+.btn:hover{background:var(--gold-light);}
+.btn:disabled{opacity:0.4;cursor:not-allowed;}
+
+.turn-tracker{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);}
+.turn-tracker .label{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--manila-dark);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;}
+.turn-now{font-size:18px;color:var(--gold-light);margin-bottom:10px;}
+.turn-now b{font-family:'Special Elite',monospace;font-weight:400;}
+
+/* ---------- Suggestion log ---------- */
+.sugg-form{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.sugg-form .full{grid-column:1/-1;}
+.sugg-form label{display:block;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--manila-dark);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:3px;}
+.sugg-form select, .sugg-form input{width:100%;}
+.sugg-form .checkbox-row{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--manila-dark);}
+.sugg-form .checkbox-row label{display:inline-block;text-transform:none;font-family:'Crimson Pro',serif;font-size:13px;color:var(--manila-dark);margin:0;letter-spacing:normal;cursor:pointer;}
+.sugg-form .checkbox-row input[type=checkbox]{width:auto;flex-shrink:0;accent-color:var(--gold);cursor:pointer;}
+.sugg-form .submit-row{grid-column:1/-1;display:flex;justify-content:flex-end;margin-top:4px;}
+
+.log-list{margin-top:16px;display:flex;flex-direction:column;gap:10px;max-height:480px;overflow-y:auto;}
+.log-entry{
+  background:var(--surface-raised);border-left:3px solid var(--gold);border-radius:0 3px 3px 0;
+  padding:10px 12px;position:relative;
+}
+.log-entry .line1{font-size:14.5px;color:var(--manila);}
+.log-entry .line1 b{color:var(--gold-light);font-weight:600;}
+.log-entry .line2{font-size:13px;color:var(--manila-dark);margin-top:3px;}
+.log-entry .line2.refuted{color:var(--gold);}
+.log-entry .note{font-size:12.5px;font-style:italic;color:var(--manila-dark);margin-top:4px;}
+.log-entry .meta{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-soft);margin-top:6px;}
+.log-entry .del{position:absolute;top:6px;right:8px;background:none;border:none;color:var(--manila-dark);cursor:pointer;font-size:13px;}
+.log-entry .del:hover{color:var(--red-bright);}
+.log-empty{color:var(--manila-dark);font-size:13.5px;padding:8px 2px;}
+
+.help-text{font-size:12.5px;color:var(--manila-dark);margin-top:10px;line-height:1.5;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function(){
+
+/* ---------------- Data ---------------- */
+const CATS = [
+  {key:'suspect', label:'Suspects', items:['Miss Scarlet','Colonel Mustard','Mrs. White','Mr. Green','Mrs. Peacock','Professor Plum']},
+  {key:'weapon', label:'Weapons', items:['Candlestick','Knife','Lead Pipe','Revolver','Rope','Wrench']},
+  {key:'room', label:'Rooms', items:['Kitchen','Ballroom','Conservatory','Dining Room','Billiard Room','Library','Lounge','Hall','Study']}
+];
+function slug(s){return s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');}
+const CARDS = [];
+CATS.forEach(cat=>cat.items.forEach(name=>CARDS.push({id:cat.key+'-'+slug(name), name, cat:cat.key})));
+const MARK_ORDER = ['', 'has', 'not', 'maybe'];
+const STORAGE_KEY = 'clue-tracker-state';
+
+/* ---------------- State ---------------- */
+let state = {
+  players: [],       // {id, name, count}
+  turnIndex: 0,
+  grid: {},           // cardId -> { colId: 'has'|'not'|'maybe' }
+  suggestions: []      // {id, ts, suggesterId, suspect, weapon, room, refuterId, revealed, note}
+};
+let saveTimer = null;
+let history = [];
+const MAX_HISTORY = 30;
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function pushHistory(){
+  history.push(JSON.stringify(state));
+  if(history.length > MAX_HISTORY) history.shift();
+}
+function undo(){
+  if(history.length === 0) return;
+  const prev = history.pop();
+  state = JSON.parse(prev);
+  render(); scheduleSave();
+}
+
+/* ---------------- Storage ---------------- */
+async function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      state = Object.assign(state, parsed);
+    }
+  }catch(e){
+    console.warn('No saved case file found, starting fresh.', e);
+  }
+  render();
+}
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }catch(e){
+      console.error('Could not save case file', e);
+    }
+  }, 350);
+}
+
+/* ---------------- Deduction engine ---------------- */
+function deduce(){
+  const colIds = state.players.map(p=>p.id).concat(['envelope']);
+  let changed = true, iter = 0;
+  while(changed && iter < 12){
+    changed = false; iter++;
+    CARDS.forEach(card=>{
+      const row = state.grid[card.id] || (state.grid[card.id] = {});
+      const hasCol = colIds.find(c=>row[c]==='has');
+      if(hasCol){
+        colIds.forEach(c=>{
+          if(c!==hasCol && row[c]!=='not'){ row[c]='not'; changed=true; }
+        });
+      }
+    });
+    const playerIds = state.players.map(p=>p.id);
+    if(playerIds.length>0){
+      CARDS.forEach(card=>{
+        const row = state.grid[card.id] || (state.grid[card.id] = {});
+        if(playerIds.every(c=>row[c]==='not') && row.envelope!=='has'){
+          row.envelope = 'has'; changed = true;
+        }
+      });
+    }
+    CATS.forEach(cat=>{
+      const catCards = CARDS.filter(c=>c.cat===cat.key);
+      const solved = catCards.find(c=>(state.grid[c.id]||{}).envelope==='has');
+      if(solved){
+        catCards.forEach(c=>{
+          if(c.id!==solved.id){
+            const row = state.grid[c.id] || (state.grid[c.id]={});
+            if(row.envelope!=='not'){ row.envelope='not'; changed=true; }
+          }
+        });
+      }
+    });
+  }
+}
+
+/* ---------------- Mutations ---------------- */
+function addPlayer(name, count){
+  name = (name||'').trim();
+  if(!name) return;
+  pushHistory();
+  state.players.push({id:'p-'+uid(), name, count: count||0});
+  deduce(); render(); scheduleSave();
+}
+function removePlayer(id){
+  pushHistory();
+  state.players = state.players.filter(p=>p.id!==id);
+  CARDS.forEach(c=>{ if(state.grid[c.id]) delete state.grid[c.id][id]; });
+  if(state.turnIndex >= state.players.length) state.turnIndex = 0;
+  deduce(); render(); scheduleSave();
+}
+function movePlayer(id, dir){
+  const i = state.players.findIndex(p=>p.id===id);
+  const j = i+dir;
+  if(j<0 || j>=state.players.length) return;
+  pushHistory();
+  [state.players[i], state.players[j]] = [state.players[j], state.players[i]];
+  render(); scheduleSave();
+}
+function nextTurn(skipHistory){
+  if(state.players.length===0) return;
+  if(!skipHistory) pushHistory();
+  state.turnIndex = (state.turnIndex+1) % state.players.length;
+  render(); scheduleSave();
+}
+function cycleCell(cardId, colId, btnEl){
+  pushHistory();
+  const row = state.grid[cardId] || (state.grid[cardId]={});
+  const cur = row[colId] || '';
+  const next = MARK_ORDER[(MARK_ORDER.indexOf(cur)+1) % MARK_ORDER.length];
+  if(next==='') delete row[colId]; else row[colId] = next;
+  deduce(); render(); scheduleSave();
+  requestAnimationFrame(()=>{
+    const fresh = document.querySelector('button[data-card="'+cardId+'"][data-col="'+colId+'"]');
+    if(fresh){ fresh.classList.add('stamp'); setTimeout(()=>fresh.classList.remove('stamp'), 280); }
+  });
+}
+function addSuggestion(data){
+  pushHistory();
+  const entry = Object.assign({id:'s-'+uid(), ts: Date.now()}, data);
+  state.suggestions.unshift(entry);
+
+  const suspectCard = CARDS.find(c=>c.cat==='suspect' && c.name===data.suspect);
+  const weaponCard = CARDS.find(c=>c.cat==='weapon' && c.name===data.weapon);
+  const roomCard = CARDS.find(c=>c.cat==='room' && c.name===data.room);
+  const trio = [suspectCard, weaponCard, roomCard].filter(Boolean);
+
+  if(data.refuterId === 'none'){
+    state.players.forEach(p=>{
+      if(p.id === data.suggesterId) return;
+      trio.forEach(card=>{
+        const row = state.grid[card.id] || (state.grid[card.id]={});
+        if(row[p.id] !== 'has') row[p.id] = 'not';
+      });
+    });
+  } else if(data.refuterId){
+    const row = (c)=> state.grid[c.id] || (state.grid[c.id]={});
+    if(data.revealed && data.revealed !== 'Unknown'){
+      const revealedCard = trio.find(c=>c.name===data.revealed);
+      if(revealedCard) row(revealedCard)[data.refuterId] = 'has';
+    } else {
+      trio.forEach(card=>{
+        const r = row(card);
+        if(!r[data.refuterId]) r[data.refuterId] = 'maybe';
+      });
+    }
+  }
+  deduce();
+  if(data.advanceTurn) nextTurn(true); else { render(); scheduleSave(); }
+}
+function deleteSuggestion(id){
+  pushHistory();
+  state.suggestions = state.suggestions.filter(s=>s.id!==id);
+  render(); scheduleSave();
+}
+async function resetAll(){
+  if(!confirm('Close this case file and start a new investigation? This clears all players, marks, and the log.')) return;
+  pushHistory();
+  state = { players: [], turnIndex: 0, grid: {}, suggestions: [] };
+  render(); scheduleSave();
+}
+
+/* ---------------- Render ---------------- */
+function esc(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function timeAgo(ts){
+  const d = new Date(ts);
+  return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}) + ' · ' + d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+}
+function markSymbol(state_){
+  if(state_==='has') return '✓';
+  if(state_==='not') return '✕';
+  if(state_==='maybe') return '?';
+  return '';
+}
+function computeProbabilities(cardId){
+  const colIds = state.players.map(p=>p.id).concat(['envelope']);
+  const row = state.grid[cardId] || {};
+  const open = colIds.filter(c => row[c] !== 'has' && row[c] !== 'not');
+  if(open.length === 0) return {};
+  let total = 0;
+  const weights = {};
+  open.forEach(c=>{
+    const w = row[c] === 'maybe' ? 2 : 1;
+    weights[c] = w; total += w;
+  });
+  const probs = {};
+  open.forEach(c=> probs[c] = weights[c] / total);
+  return probs;
+}
+function refuteCount(playerId){
+  return state.suggestions.filter(s=>s.refuterId===playerId).length;
+}
+
+function render(){
+  const app = document.getElementById('app');
+
+  const playersHTML = state.players.length === 0
+    ? '<p class="help-text">No detectives added yet. Add players to begin building the case file.</p>'
+    : state.players.map((p,i)=>`
+      <div class="player-row ${i===state.turnIndex ? 'current' : ''}">
+        <span class="order-btn" data-act="move-up" data-id="${p.id}">▲</span>
+        <span class="order-btn" data-act="move-down" data-id="${p.id}">▼</span>
+        <span class="name">${esc(p.name)}</span>
+        <span class="badge">${p.count} cards</span>
+        <span class="badge refute-badge" title="Times this player has refuted a suggestion">↺ ${refuteCount(p.id)}</span>
+        <button class="del-btn" data-act="del-player" data-id="${p.id}" title="Remove player">✕</button>
+      </div>
+    `).join('');
+
+  const turnHTML = state.players.length === 0 ? '' : `
+    <div class="turn-tracker">
+      <div class="label">Turn Tracker</div>
+      <div class="turn-now">Up now: <b>${esc(state.players[state.turnIndex].name)}</b></div>
+      <button class="btn" data-act="next-turn">Next Turn ▶</button>
+    </div>`;
+
+  const playerOptions = state.players.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  const refuterOptions = '<option value="none">No one</option>' + playerOptions;
+
+  let gridHTML;
+  if(state.players.length === 0){
+    gridHTML = `<div class="empty-state">Add at least one player to start marking the evidence board.<br><b>The grid will fill itself in</b> as you log suggestions.</div>`;
+  } else {
+    const headCols = state.players.map(p=>`<th>${esc(p.name)}<span class="pcount">${p.count} cards</span></th>`).join('');
+    let rows = '';
+    CATS.forEach(cat=>{
+      rows += `<tr class="cat-row"><td colspan="${state.players.length+2}">${cat.label}</td></tr>`;
+      cat.items.forEach(name=>{
+        const card = CARDS.find(c=>c.cat===cat.key && c.name===name);
+        const row = state.grid[card.id] || {};
+        const probs = computeProbabilities(card.id);
+        const playerCells = state.players.map(p=>{
+          const v = row[p.id] || '';
+          let cls = v==='has' ? 'has' : v==='not' ? 'not' : v==='maybe' ? 'maybe' : 'open';
+          let label = markSymbol(v);
+          let styleAttr = '';
+          if(v!=='has' && v!=='not'){
+            const pr = probs[p.id] || 0;
+            label = Math.round(pr*100) + '%';
+            const alpha = (0.06 + pr*0.55).toFixed(2);
+            styleAttr = ` style="background:rgba(204,159,92,${alpha});"`;
+            cls += ' prob';
+          }
+          return `<td class="cell"><button class="mark ${cls}"${styleAttr} data-card="${card.id}" data-col="${p.id}">${label}</button></td>`;
+        }).join('');
+        const ev = row.envelope || '';
+        let evCls = ev==='has' ? 'envelope-has' : ev==='not' ? 'not' : ev==='maybe' ? 'maybe' : 'open';
+        let evLabel = ev==='has' ? '★' : markSymbol(ev);
+        let evStyle = '';
+        if(ev!=='has' && ev!=='not'){
+          const pe = probs['envelope'] || 0;
+          evLabel = Math.round(pe*100) + '%';
+          const alpha = (0.06 + pe*0.55).toFixed(2);
+          evStyle = ` style="background:rgba(221,90,71,${alpha});"`;
+          evCls += ' prob env-prob';
+        }
+        rows += `<tr><td class="card-name">${esc(name)}</td>${playerCells}<td class="cell"><button class="mark ${evCls}"${evStyle} data-card="${card.id}" data-col="envelope">${evLabel}</button></td></tr>`;
+      });
+    });
+    gridHTML = `
+      <div class="board-scroll">
+        <table>
+          <thead><tr><th class="evidence-th">Evidence</th>${headCols}<th class="envelope-th">Case File</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  const logHTML = state.suggestions.length === 0
+    ? '<div class="log-empty">No suggestions logged yet. Entries you add will appear here.</div>'
+    : state.suggestions.map(s=>{
+        const suggester = state.players.find(p=>p.id===s.suggesterId);
+        const refuter = state.players.find(p=>p.id===s.refuterId);
+        const line2 = s.refuterId==='none'
+          ? `<div class="line2">↳ No one could refute.</div>`
+          : refuter
+            ? `<div class="line2 refuted">↳ ${esc(refuter.name)} showed a card${s.revealed && s.revealed!=='Unknown' ? ': '+esc(s.revealed) : ' (unknown which).'}</div>`
+            : '';
+        return `
+        <div class="log-entry">
+          <button class="del" data-act="del-log" data-id="${s.id}" title="Delete entry">✕</button>
+          <div class="line1"><b>${esc(suggester ? suggester.name : '—')}</b> suggested <b>${esc(s.suspect)}</b> with the <b>${esc(s.weapon)}</b> in the <b>${esc(s.room)}</b>.</div>
+          ${line2}
+          ${s.note ? `<div class="note">"${esc(s.note)}"</div>` : ''}
+          <div class="meta">${timeAgo(s.ts)}</div>
+        </div>`;
+      }).join('');
+
+  app.innerHTML = `
+    <div class="masthead">
+      <div class="masthead-left">
+        <svg class="icon-mark" viewBox="0 0 40 40" fill="none">
+          <circle cx="17" cy="17" r="11" stroke="#E0B567" stroke-width="2.5"/>
+          <line x1="25" y1="25" x2="35" y2="35" stroke="#E0B567" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <h1>Case File No. 1949</h1>
+          <p>A Clue investigation tracker — mark, deduce, solve.</p>
+        </div>
+      </div>
+      <div class="masthead-actions">
+        <button class="undo-btn" data-act="undo" ${history.length===0?'disabled':''}>↶ Undo</button>
+        <button class="reset-btn" data-act="reset">Close Case &amp; Start Over</button>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div class="board">
+        <div class="board-head">
+          <h2 style="border:none;margin:0;">Evidence Board</h2>
+          <div class="legend">
+            <span><i class="has">✓</i> confirmed has</span>
+            <span><i class="not">✕</i> ruled out</span>
+            <span><i class="maybe">?</i> maybe</span>
+            <span><i class="env">★</i> in case file</span>
+            <span><i class="prob-swatch"></i> est. odds</span>
+          </div>
+        </div>
+        ${gridHTML}
+        <p class="help-text">Click any cell to cycle through marks. Unresolved cells show an estimated probability — both as a percentage and as shading intensity — based on what's still open in that row; it sharpens automatically as you rule cards in and out. The board auto-fills logical deductions — for example, once a card is confirmed in one hand, it's automatically ruled out everywhere else.</p>
+      </div>
+
+      <div class="sidebar">
+        <div class="panel">
+          <h2>Detectives</h2>
+          ${playersHTML}
+          <form class="add-player-form" data-act="add-player">
+            <input type="text" name="name" placeholder="Player name" maxlength="30" required>
+            <input type="number" name="count" placeholder="Cards" min="0" max="21">
+            <button class="btn" type="submit">Add</button>
+          </form>
+          ${turnHTML}
+        </div>
+
+        <div class="panel">
+          <h2>Suggestion Log</h2>
+          <form class="sugg-form" data-act="add-suggestion">
+            <div class="full">
+              <label>Suggested by</label>
+              <select name="suggesterId" required>${playerOptions}</select>
+            </div>
+            <div>
+              <label>Suspect</label>
+              <select name="suspect" required>${CATS[0].items.map(n=>`<option>${esc(n)}</option>`).join('')}</select>
+            </div>
+            <div>
+              <label>Weapon</label>
+              <select name="weapon" required>${CATS[1].items.map(n=>`<option>${esc(n)}</option>`).join('')}</select>
+            </div>
+            <div class="full">
+              <label>Room</label>
+              <select name="room" required>${CATS[2].items.map(n=>`<option>${esc(n)}</option>`).join('')}</select>
+            </div>
+            <div class="full">
+              <label>Refuted by</label>
+              <select name="refuterId">${refuterOptions}</select>
+            </div>
+            <div class="full" data-revealed-wrap>
+              <label>Card revealed (if known)</label>
+              <select name="revealed"><option>Unknown</option></select>
+            </div>
+            <div class="full">
+              <label>Note (optional)</label>
+              <input type="text" name="note" maxlength="120" placeholder="Anything worth remembering…">
+            </div>
+            <div class="full checkbox-row">
+              <input type="checkbox" name="advanceTurn" id="advanceTurn" checked>
+              <label for="advanceTurn">Advance to next turn after logging</label>
+            </div>
+            <div class="full submit-row">
+              <button class="btn" type="submit" ${state.players.length===0 ? 'disabled' : ''}>Log Suggestion</button>
+            </div>
+          </form>
+          <div class="log-list">${logHTML}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  wireEvents();
+}
+
+/* ---------------- Events ---------------- */
+function wireEvents(){
+  const app = document.getElementById('app');
+
+  app.querySelectorAll('button.mark').forEach(btn=>{
+    btn.addEventListener('click', ()=> cycleCell(btn.dataset.card, btn.dataset.col, btn));
+  });
+
+  const resetBtn = app.querySelector('[data-act="reset"]');
+  if(resetBtn) resetBtn.addEventListener('click', resetAll);
+
+  const undoBtn = app.querySelector('[data-act="undo"]');
+  if(undoBtn) undoBtn.addEventListener('click', undo);
+
+  const nextTurnBtn = app.querySelector('[data-act="next-turn"]');
+  if(nextTurnBtn) nextTurnBtn.addEventListener('click', nextTurn);
+
+  app.querySelectorAll('[data-act="move-up"]').forEach(el=>el.addEventListener('click', ()=>movePlayer(el.dataset.id,-1)));
+  app.querySelectorAll('[data-act="move-down"]').forEach(el=>el.addEventListener('click', ()=>movePlayer(el.dataset.id,1)));
+  app.querySelectorAll('[data-act="del-player"]').forEach(el=>el.addEventListener('click', ()=>removePlayer(el.dataset.id)));
+  app.querySelectorAll('[data-act="del-log"]').forEach(el=>el.addEventListener('click', ()=>deleteSuggestion(el.dataset.id)));
+
+  const addPlayerForm = app.querySelector('[data-act="add-player"]');
+  if(addPlayerForm){
+    addPlayerForm.addEventListener('submit', e=>{
+      e.preventDefault();
+      const fd = new FormData(addPlayerForm);
+      addPlayer(fd.get('name'), parseInt(fd.get('count'))||0);
+    });
+  }
+
+  const suggForm = app.querySelector('[data-act="add-suggestion"]');
+  if(suggForm){
+    const revealedSelect = suggForm.querySelector('[name="revealed"]');
+    const suspectSel = suggForm.querySelector('[name="suspect"]');
+    const weaponSel = suggForm.querySelector('[name="weapon"]');
+    const roomSel = suggForm.querySelector('[name="room"]');
+    function syncRevealed(){
+      const opts = ['Unknown', suspectSel.value, weaponSel.value, roomSel.value];
+      revealedSelect.innerHTML = opts.map(o=>`<option>${esc(o)}</option>`).join('');
+    }
+    [suspectSel, weaponSel, roomSel].forEach(s=>s.addEventListener('change', syncRevealed));
+    syncRevealed();
+
+    suggForm.addEventListener('submit', e=>{
+      e.preventDefault();
+      const fd = new FormData(suggForm);
+      addSuggestion({
+        suggesterId: fd.get('suggesterId'),
+        suspect: fd.get('suspect'),
+        weapon: fd.get('weapon'),
+        room: fd.get('room'),
+        refuterId: fd.get('refuterId'),
+        revealed: fd.get('revealed'),
+        note: fd.get('note'),
+        advanceTurn: fd.get('advanceTurn') === 'on'
+      });
+    });
+  }
+}
+
+loadState();
+})();
+</script>
+</body>
+</html>
