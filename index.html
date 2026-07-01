@@ -102,6 +102,23 @@ body{margin:0;padding:0;background:var(--bg);color:var(--manila);font-family:'Cr
 .customize-help{grid-column:1/-1;margin-top:2px;margin-bottom:0;}
 @media (max-width:920px){.customize-panel{grid-template-columns:1fr;}}
 
+.recommend-panel{border-color:var(--gold);box-shadow:0 0 0 1px rgba(204,159,92,0.15) inset;}
+.recommend-panel.solved{border-color:var(--red-bright);box-shadow:0 0 0 1px rgba(221,90,71,0.18) inset;}
+.rec-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;}
+.rec-item{
+  background:var(--surface-raised);border:1px solid var(--line);border-radius:3px;
+  padding:9px 8px;text-align:center;
+}
+.rec-item.rec-solved{border-color:var(--red-bright);}
+.rec-label{
+  display:block;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:1px;
+  text-transform:uppercase;color:var(--manila-dark);margin-bottom:4px;
+}
+.rec-value{display:block;font-size:14.5px;color:var(--gold-light);line-height:1.25;}
+.rec-solved .rec-value{color:var(--red-bright);}
+.solved-text{font-size:15px;line-height:1.5;color:var(--manila);}
+.solved-text b{color:var(--red-bright);}
+
 .empty-state{padding:40px 20px;text-align:center;color:var(--manila-dark);font-size:15px;}
 .empty-state b{color:var(--gold-light);}
 
@@ -443,6 +460,33 @@ function computeProbabilities(cardId){
 function refuteCount(playerId){
   return state.suggestions.filter(s=>s.refuterId===playerId).length;
 }
+function entropyOf(cardId){
+  const probs = computeProbabilities(cardId);
+  const values = Object.values(probs);
+  if(values.length === 0) return -1; // fully resolved — no information left to gain
+  return -values.reduce((sum,p)=> p>0 ? sum + p*Math.log2(p) : sum, 0);
+}
+function bestCardInCategory(catKey){
+  let best = null, bestScore = -1;
+  CARDS.filter(c=>c.cat===catKey).forEach(c=>{
+    const score = entropyOf(c.id);
+    if(score > bestScore){ bestScore = score; best = c; }
+  });
+  return best;
+}
+function suggestBestAsk(){
+  return {
+    suspect: bestCardInCategory('suspect'),
+    weapon: bestCardInCategory('weapon'),
+    room: bestCardInCategory('room')
+  };
+}
+function categorySolvedCard(catKey){
+  return CARDS.filter(c=>c.cat===catKey).find(c=>(state.grid[c.id]||{}).envelope==='has');
+}
+function caseSolved(){
+  return CATS.every(cat=> !!categorySolvedCard(cat.key));
+}
 
 function render(){
   const app = document.getElementById('app');
@@ -469,6 +513,37 @@ function render(){
 
   const playerOptions = state.players.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
   const refuterOptions = '<option value="none">No one</option>' + playerOptions;
+
+  let recommendHTML = '';
+  if(state.players.length > 0){
+    if(caseSolved()){
+      const sol = { suspect: categorySolvedCard('suspect'), weapon: categorySolvedCard('weapon'), room: categorySolvedCard('room') };
+      recommendHTML = `
+        <div class="panel recommend-panel solved">
+          <h2>🔍 Case Solved</h2>
+          <p class="solved-text">It was <b>${esc(displayName(sol.suspect))}</b>, with the <b>${esc(displayName(sol.weapon))}</b>, in the <b>${esc(displayName(sol.room))}</b>.</p>
+        </div>`;
+    } else {
+      const rec = suggestBestAsk();
+      const labels = {suspect:'Suspect', weapon:'Weapon', room:'Room'};
+      const items = ['suspect','weapon','room'].map(key=>{
+        const card = rec[key];
+        if(!card){
+          const solvedCard = categorySolvedCard(key);
+          return `<div class="rec-item rec-solved"><span class="rec-label">${labels[key]}</span><span class="rec-value">✓ ${esc(displayName(solvedCard))}</span></div>`;
+        }
+        return `<div class="rec-item"><span class="rec-label">${labels[key]}</span><span class="rec-value">${esc(displayName(card))}</span></div>`;
+      }).join('');
+      const canUse = rec.suspect && rec.weapon && rec.room;
+      recommendHTML = `
+        <div class="panel recommend-panel">
+          <h2>🔍 Best Question to Ask</h2>
+          <div class="rec-grid">${items}</div>
+          <p class="help-text">Picked from the cards you're most uncertain about — asking here gets you the most new information, whoever answers.</p>
+          ${canUse ? `<button class="btn" data-act="use-recommendation" data-suspect="${rec.suspect.id}" data-weapon="${rec.weapon.id}" data-room="${rec.room.id}">Use This Suggestion ▾</button>` : ''}
+        </div>`;
+    }
+  }
 
   let gridHTML;
   if(state.players.length === 0){
@@ -606,6 +681,8 @@ function render(){
           ${turnHTML}
         </div>
 
+        ${recommendHTML}
+
         <div class="panel">
           <h2>Suggestion Log</h2>
           <form class="sugg-form" data-act="add-suggestion">
@@ -674,6 +751,22 @@ function wireEvents(){
   app.querySelectorAll('.customize-input').forEach(inp=>{
     inp.addEventListener('change', ()=> renameCard(inp.dataset.card, inp.value));
   });
+
+  const useRecBtn = app.querySelector('[data-act="use-recommendation"]');
+  if(useRecBtn){
+    useRecBtn.addEventListener('click', ()=>{
+      const form = app.querySelector('[data-act="add-suggestion"]');
+      if(!form) return;
+      const sSel = form.querySelector('[name="suspectId"]');
+      const wSel = form.querySelector('[name="weaponId"]');
+      const rSel = form.querySelector('[name="roomId"]');
+      if(sSel) sSel.value = useRecBtn.dataset.suspect;
+      if(wSel) wSel.value = useRecBtn.dataset.weapon;
+      if(rSel) rSel.value = useRecBtn.dataset.room;
+      [sSel, wSel, rSel].forEach(s=> s && s.dispatchEvent(new Event('change')));
+      form.scrollIntoView({behavior:'smooth', block:'center'});
+    });
+  }
 
   const nextTurnBtn = app.querySelector('[data-act="next-turn"]');
   if(nextTurnBtn) nextTurnBtn.addEventListener('click', nextTurn);
