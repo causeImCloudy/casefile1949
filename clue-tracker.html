@@ -267,9 +267,9 @@ function undo(){
 /* ---------------- Storage ---------------- */
 async function loadState(){
   try{
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if(raw){
-      const parsed = JSON.parse(raw);
+    const res = await window.storage.get(STORAGE_KEY, false);
+    if(res && res.value){
+      const parsed = JSON.parse(res.value);
       state = Object.assign(state, parsed);
     }
   }catch(e){
@@ -279,9 +279,9 @@ async function loadState(){
 }
 function scheduleSave(){
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(()=>{
+  saveTimer = setTimeout(async ()=>{
     try{
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      await window.storage.set(STORAGE_KEY, JSON.stringify(state), false);
     }catch(e){
       console.error('Could not save case file', e);
     }
